@@ -1,0 +1,284 @@
+---
+title: "UTS MPDW Praktikum"
+author: "Muhammad Fahrezi Maulana_G1401221103"
+output: html_document
+date: "2024-10-10"
+---
+
+```{r}
+library(readxl)
+dt <- read_excel("C:/Users/DSITD/Downloads/dataset_ujian_praktikum.xlsx")
+dt
+```
+```{r}
+library("forecast")
+library("graphics")
+library("TTR")
+library("TSA")
+library("MASS")
+```
+
+# Membuat data menjadi time series
+```{r}
+Voltage <- dt$Voltage
+dt.ts <- ts(dt$Voltage)
+```
+
+# Plot data time series 
+```{r}
+ts.plot(dt.ts, xlab="Time Period ", ylab="Voltage", 
+        main = "Time Series Plot")
+points(dt.ts)
+```
+## Single Moving Average & Double Moving Average
+
+### Pembagian Data
+```{r}
+train <- dt[1:293,]
+test <- dt[294:500,]
+train.ts <- ts(train$Voltage)
+test.ts <- ts(test$Voltage)
+```
+
+### Eksplorasi Data
+```{r}
+#eksplorasi keseluruhan data
+plot(dt.ts, col="red",main="Plot semua data")
+points(dt.ts)
+
+#eksplorasi data latih
+plot(train.ts, col="blue",main="Plot data latih")
+points(train.ts)
+
+#eksplorasi data uji
+plot(test.ts, col="blue",main="Plot data uji")
+points(test.ts)
+```
+
+## Single Moving Average (SMA)
+```{r}
+data.sma<-SMA(train.ts, n=3)
+data.sma
+```
+```{r}
+data.ramal<-c(NA,data.sma)
+data.ramal
+```
+
+
+```{r}
+data.gab<-cbind(aktual=c(train.ts,rep(NA,50)),pemulusan=c(data.sma,rep(NA,50)),ramalan=c(data.ramal,rep(data.ramal[length(data.ramal)],49)))
+data.gab
+```
+```{r}
+ts.plot(dt.ts, xlab="Time Period ", ylab="Voltage", main= "SMA N=3 Data Voltage")
+points(dt.ts)
+lines(data.gab[,2],col="green",lwd=2)
+lines(data.gab[,3],col="red",lwd=2)
+legend("topleft",c("data aktual","data pemulusan","data peramalan"), lty=8, col=c("black","green","red"), cex=0.5)
+```
+### Menghitung nilai keakuratan data latih
+
+```{r}
+error_train.sma = train.ts-data.ramal[1:length(train.ts)]
+SSE_train.sma = sum(error_train.sma[5:length(train.ts)]^2)
+MSE_train.sma = mean(error_train.sma[5:length(train.ts)]^2)
+MAPE_train.sma = mean(abs((error_train.sma[5:length(train.ts)]/train.ts[5:length(train.ts)])*100))
+
+akurasi_train.sma <- matrix(c(SSE_train.sma, MSE_train.sma, MAPE_train.sma))
+row.names(akurasi_train.sma)<- c("SSE", "MSE", "MAPE")
+colnames(akurasi_train.sma) <- c("Akurasi m = 3")
+akurasi_train.sma
+```
+Dalam hal ini nilai MAPE data latih pada metode pemulusan SMA kurang dari 2%, nilai ini dapat dikategorikan sebagai nilai akurasi yang sangat baik. Selanjutnya dilakukan perhitungan nilai MAPE data uji pada metde pemulusan SMA.
+
+### Menghitung nilai keakuratan data uji
+
+```{r}
+error_test.sma = test.ts-data.gab[294:333,3]
+SSE_test.sma = sum(error_test.sma^2)
+MSE_test.sma = mean(error_test.sma^2)
+MAPE_test.sma = mean(abs((error_test.sma/test.ts*100)))
+
+akurasi_test.sma <- matrix(c(SSE_test.sma, MSE_test.sma, MAPE_test.sma))
+row.names(akurasi_test.sma)<- c("SSE", "MSE", "MAPE")
+colnames(akurasi_test.sma) <- c("Akurasi m = 4")
+akurasi_test.sma
+```
+Perhitungan akurasi menggunakan data latih menghasilkan nilai MAPE yang kurang dari 10% sehingga nilai akurasi ini dapat dikategorikan sebagai sangat baik.
+
+## Proses MA(1)
+
+### Plot ACF
+
+```{r}
+acf(dt.ts,lag.max = 20)
+```
+
+
+### Plot PACF
+
+```{r}
+pacf(dt.ts)
+```
+
+
+### Plot EACF
+
+```{r}
+TSA::eacf(dt.ts)
+```
+
+Berdasarkan pola segitiga nol pada plot EACF, terlihat bahwa segitiga nol berada pada ordo AR(2) dan ordo MA(1)
+
+## Proses AR
+
+```{r}
+n<-length(dt.ts)
+n
+ar <- c(1:n) 
+for (i in 2:n) {ar[i]<-dt.ts[i]+0.7*ar[i-1]}
+ar
+```
+
+### Plot ACF
+
+```{r}
+acf(ar)
+```
+
+Berdasarkan plot ACF tersebut terlihat bahwa plot ACF cenderung *tails off* dan cenderung membentuk pola grafik sinus
+
+### Plot PACF
+
+```{r}
+pacf(ar)
+```
+
+Berdasarkan plot PACF tersebut, terlihat bahwa plot PACF *cuts off* pada lag pertama, sejalan dengan teori yang ada
+
+### Plot EACF
+
+```{r}
+TSA::eacf(ar)
+```
+Berdasarkan pola segitiga nol pada plot EACF, terlihat bahwa segitiga nol berada pada ordo AR(3) dan ordo MA(1)
+### Uji Stasioneritas Data
+
+#### Plot ACF
+
+```{r}
+acf(dt.ts)
+```
+
+Berdasarkan plot ACF, terlihat bahwa plot ACF data menurun secara perlahan (*tails of slowly*). Hal ini juga menjadi indikasi bahwa data tidak stasioner dalam rataan
+
+
+## Uji ADF
+```{r}
+tseries::adf.test(dt.ts)
+```
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.1091 yang lebih besar dari taraf nyata 5% sehingga tak tolak $H_0$ dan menandakan bahwa data tidak stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time series dan plot ACF, sehingga ketidakstasioneran model kedepannya harus ditangani
+
+#### Plot Box-Cox
+
+```{r}
+index <- seq(1:500)
+bc = boxcox(dt.ts~index, lambda = seq(5,10,by=1))
+#Nilai Rounded Lambda
+lambda <- bc$x[which.max(bc$y)]
+lambda
+#SK
+bc$x[bc$y > max(bc$y) - 1/2 * qchisq(.95,1)]
+```
+### Penanganan Ketidakstasioneran Data
+Data di diferencing 2 kali
+```{r}
+dt.diff<-diff(dt.ts,differences = 2) 
+plot.ts(dt.diff, lty=1, xlab="waktu", ylab="Data Difference 1 Voltage", main="Plot Difference Voltage")
+```
+Berdasarkan plot data deret waktu, terlihat bahwa data sudah stasioner dalam rataan ditandai dengan data bergerak pada nilai tengah tertentu (tidak terdapat trend ataupun musiman pada data)
+
+
+#### Plot ACF
+
+```{r}
+acf(dt.diff)
+```
+#### Plot PACF
+
+```{r}
+pacf(dt.diff)
+```
+
+#### Plot EACF
+
+```{r}
+eacf(dt.diff)
+```
+
+Identifikasi model menggunakan plot EACF dilakukan dengan melihat ujung segitiga pada pola segitiga nol. Dalam hal ini model tentatif yang terbentuk adalah ARIMA(0,1,1), ARIMA(1,1,2), ARIMA(0,1,2).
+
+### Pendugaan Parameter Model Tentatif
+
+#### ARIMA(0,1,1)
+
+```{r}
+model1.da=Arima(dt.diff, order=c(0,1,1),method="ML")
+summary(model1.da) #AIC=1811.52
+lmtest::coeftest(model1.da) 
+```
+
+#### ARIMA(1,1,2)
+
+```{r}
+model2.da=Arima(dt.diff, order=c(1,1,2),method="ML")
+summary(model2.da) #AIC=1475.9
+lmtest::coeftest(model2.da) 
+```
+
+#### ARIMA(0,1,2)
+
+```{r}
+model3.da=Arima(dt.diff, order=c(0,1,2),method="ML")
+summary(model3.da) #AIC=1479.7
+lmtest::coeftest(model3.da) 
+```
+Berdasarkan pendugaan parameter di atas, nilai AIC terkecil dimiliki oleh model ARIMA(1,1,2) dan parameter model ARIMA(1,1,2) juga seluruhnya signifikan sehingga model yang dipilih adalah model ARIMA(1,1,2).
+
+### Analisis Sisaan
+
+#### Eksplorasi Sisaan
+
+```{r}
+#Eksplorasi 
+sisaan.da <- model2.da$residuals 
+par(mfrow=c(2,2)) 
+qqnorm(sisaan.da) 
+qqline(sisaan.da, col = "blue", lwd = 2) 
+plot(c(1:length(sisaan.da)),sisaan.da) 
+acf(sisaan.da) 
+pacf(sisaan.da) 
+par(mfrow = c(1,1))
+```
+
+Berdasarkan plot kuantil-kuantil normal, secara eksplorasi ditunjukkan sisaan menyebar normal ditandai dengan titik titik yang cenderung mengikuti garis $45^{\circ}$.
+
+#### Uji Formal
+
+```{r}
+#1) Sisaan Menyebar Normal 
+ks.test(sisaan.da,"pnorm")  #tak tolak H0 > sisaan menyebar normal
+```
+
+Selain dengan eksplorasi, asumsi tersebut dapat diuji menggunakan uji formal. Pada tahapan ini uji formal yang digunakan untuk normalitas adalah uji Kolmogorov-Smirnov (KS). Hipotesis pada uji KS adalah sebagai berikut.
+
+$H_0$ : Sisaan menyebar normal
+
+$H_1$ : Sisaan tidak menyebar normal
+
+Berdasarkan uji KS tersebut, didapat *p-value* sebesar 0.42 yang lebih dari taraf nyata 5% sehingga tolak $H_0$ dan menandakan bahwa sisaan  menyebar normal. Hal ini sesuai dengan hasil eksplorasi menggunakan plot kuantil-kuantil normal.
